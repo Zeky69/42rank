@@ -1,0 +1,22 @@
+{
+  "name": "42fightrank",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 4266",
+    "build": "next build",
+    "start": "next start -p 4266"
+  },
+  "dependencies": {
+    "iron-session": "^8.0.4",
+    "next": "^14.2.18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.0"
+  }
+}
