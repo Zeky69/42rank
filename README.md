@@ -1,4 +1,4 @@
-# 42 FightRank
+# 42 Rank
 
 Site de classement entre etudiants 42 par campus et annee de piscine, avec
 comparaison projet par projet pour savoir quoi rattraper.
