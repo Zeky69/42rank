@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { publicBaseUrl } from "@/lib/base-url";
 
 type TokenResponse = { access_token?: string; error?: string };
 type Cursus = { id: number; slug: string };
@@ -15,8 +16,9 @@ type Me = {
 };
 
 export async function GET(req: NextRequest) {
+  const base = publicBaseUrl();
   const code = req.nextUrl.searchParams.get("code");
-  if (!code) return NextResponse.redirect(new URL("/", req.url));
+  if (!code) return NextResponse.redirect(`${base}/`);
 
   const tokenRes = await fetch("https://api.intra.42.fr/oauth/token", {
     method: "POST",
@@ -61,5 +63,5 @@ export async function GET(req: NextRequest) {
   session.image = me.image?.link;
   await session.save();
 
-  return NextResponse.redirect(new URL("/ranking", req.url));
+  return NextResponse.redirect(`${base}/ranking`);
 }
