@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { publicBaseUrl } from "@/lib/base-url";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const session = await getSession();
   session.destroy();
-  return NextResponse.redirect(new URL("/", req.url));
+  return NextResponse.redirect(`${publicBaseUrl()}/`);
 }
