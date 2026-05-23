@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { publicBaseUrl } from "@/lib/base-url";
+import { recordActivity } from "@/lib/stats";
 
 type TokenResponse = { access_token?: string; error?: string };
 type Cursus = { id: number; slug: string };
@@ -62,6 +63,7 @@ export async function GET(req: NextRequest) {
   session.cursusId = main42cursus?.cursus_id ?? 21;
   session.image = me.image?.link;
   await session.save();
+  void recordActivity(me.id);
 
   return NextResponse.redirect(`${base}/ranking`);
 }

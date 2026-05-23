@@ -2,6 +2,9 @@ type CacheEntry = { data: unknown; expires: number };
 
 const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<unknown>>();
+// Per-token queue ensuring max ~1.8 req/s, safely under the 42 API 2 req/s spam limit
+const tokenQueues = new Map<string, Promise<void>>();
+const RATE_LIMIT_MS = 550;
 
 const DEFAULT_TTL = 5 * 60 * 1000;
 export const TTL = {
@@ -12,6 +15,17 @@ export const TTL = {
 };
 
 export type FetchOptions = { ttl?: number; force?: boolean };
+
+// Returns a promise that resolves when this slot's turn arrives.
+// Each call chains a RATE_LIMIT_MS delay for the next caller.
+function acquireSlot(token: string): Promise<void> {
+  const prev = tokenQueues.get(token) ?? Promise.resolve();
+  tokenQueues.set(
+    token,
+    prev.then(() => new Promise<void>((r) => setTimeout(r, RATE_LIMIT_MS))),
+  );
+  return prev;
+}
 
 export async function ftFetch<T = unknown>(
   path: string,
@@ -31,6 +45,7 @@ export async function ftFetch<T = unknown>(
   if (flying) return flying as Promise<T>;
 
   const promise = (async () => {
+    await acquireSlot(accessToken);
     try {
       const res = await fetch(`https://api.intra.42.fr${path}`, {
         headers: { Authorization: `Bearer ${accessToken}` },

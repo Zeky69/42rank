@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { ftFetch, TTL } from "@/lib/ft-api";
+import { recordActivity } from "@/lib/stats";
 import RankingData from "./RankingData";
 import RankingSkeleton from "./RankingSkeleton";
 import Filters from "./Filters";
@@ -39,8 +40,9 @@ export default async function RankingPage({
   const session = await getSession();
   if (!session.accessToken) redirect("/");
 
-  const { accessToken, login, campusId, campusName, poolYear, cursusId } =
+  const { accessToken, login, userId, campusId, campusName, poolYear, cursusId } =
     session;
+  if (userId) void recordActivity(userId);
 
   if (!campusId || !poolYear || !cursusId) {
     return (

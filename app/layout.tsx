@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
+import { Syne } from "next/font/google";
 import "./globals.css";
+
+const syne = Syne({
+  subsets: ["latin"],
+  weight: ["700", "800"],
+  variable: "--font-syne",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "42 Rank",
@@ -13,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
-      <body>{children}</body>
+      <body className={syne.variable}>{children}</body>
     </html>
   );
 }
