@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { ftFetch, TTL, TokenExpiredError } from "@/lib/ft-api";
+import { loadCursusXP, saveCursusXP } from "@/lib/cursus-xp-disk-cache";
 import ClickableAvatar from "../../ranking/ClickableAvatar";
 
 type ProjectsUser = {
@@ -56,6 +57,9 @@ async function fetchAllCursusProjectXP(
   cursusId: number,
   token: string,
 ): Promise<Map<number, number>> {
+  const disk = loadCursusXP(cursusId);
+  if (disk) return disk;
+
   const map = new Map<number, number>();
   try {
     for (let page = 1; page <= 5; page++) {
@@ -81,6 +85,8 @@ async function fetchAllCursusProjectXP(
   } catch {
     // silent fail — caller falls back to per-project fetches
   }
+
+  if (map.size > 0) saveCursusXP(cursusId, map);
   return map;
 }
 
