@@ -1,4 +1,5 @@
-import { ftFetch, TTL } from "@/lib/ft-api";
+import { redirect } from "next/navigation";
+import { ftFetch, TTL, TokenExpiredError } from "@/lib/ft-api";
 import ClickableAvatar from "../../ranking/ClickableAvatar";
 
 type ProjectsUser = {
@@ -9,6 +10,8 @@ type ProjectsUser = {
   "validated?": boolean | null;
   cursus_ids: number[];
   marked_at: string | null;
+  xp?: number;
+  experience_points?: number;
   project: {
     id: number;
     name: string;
@@ -17,13 +20,18 @@ type ProjectsUser = {
   };
 };
 
+function projectXP(p: ProjectsUser): number | null {
+  const v = p.xp ?? p.experience_points ?? null;
+  return v !== null && v > 0 ? v : null;
+}
+
 type ApiUser = {
   id: number;
   login: string;
   displayname: string;
   usual_full_name?: string;
   image?: { link?: string; versions?: { medium?: string; large?: string } };
-  cursus_users?: { cursus_id: number; level: number }[];
+  cursus_users?: { cursus_id: number; level: number; experience_points?: number }[];
   correction_point: number;
   wallet: number;
 };
@@ -36,13 +44,62 @@ async function fetchAllProjects(
   const all: ProjectsUser[] = [];
   for (let page = 1; page <= 10; page++) {
     const path = `/v2/users/${userId}/projects_users?page[size]=100&page[number]=${page}`;
-    const batch = await ftFetch<ProjectsUser[]>(path, token, {
-      ttl: TTL.projects,
-    });
+    const batch = await ftFetch<ProjectsUser[]>(path, token, { ttl: TTL.projects });
     all.push(...batch);
     if (batch.length < 100) break;
   }
   return all.filter((p) => p.cursus_ids.includes(cursusId));
+}
+
+
+async function fetchAllCursusProjectXP(
+  cursusId: number,
+  token: string,
+): Promise<Map<number, number>> {
+  const map = new Map<number, number>();
+  try {
+    for (let page = 1; page <= 5; page++) {
+      const batch = await ftFetch<
+        Array<{
+          id: number;
+          difficulty?: number;
+          project_sessions?: Array<{ maximum_xp?: number; is_primary?: boolean }>;
+        }>
+      >(
+        `/v2/cursus/${cursusId}/projects?page[size]=100&page[number]=${page}`,
+        token,
+        { ttl: TTL.longLived },
+      );
+      for (const proj of batch) {
+        const session =
+          proj.project_sessions?.find((s) => s.is_primary) ?? proj.project_sessions?.[0];
+        const xp = session?.maximum_xp ?? proj.difficulty ?? null;
+        if (xp != null && xp > 0) map.set(proj.id, xp);
+      }
+      if (batch.length < 100) break;
+    }
+  } catch {
+    // silent fail — caller falls back to per-project fetches
+  }
+  return map;
+}
+
+async function fetchProjectBaseXP(projectId: number, token: string): Promise<number | null> {
+  try {
+    const data = await ftFetch<{
+      difficulty?: number;
+      project_sessions?: Array<{ maximum_xp?: number; is_primary?: boolean }>;
+    }>(`/v2/projects/${projectId}`, token, { ttl: TTL.longLived });
+    const session =
+      data.project_sessions?.find((s) => s.is_primary) ?? data.project_sessions?.[0];
+    return session?.maximum_xp ?? data.difficulty ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function fmtXP(xp: number): string {
+  return xp.toLocaleString("fr-FR");
 }
 
 function markClass(mark: number | null): string {
@@ -82,7 +139,9 @@ export default async function CompareData({
   let them: ApiUser | null = null;
   let myProjects: ProjectsUser[] = [];
   let theirProjects: ProjectsUser[] = [];
+  let allCursusXP = new Map<number, number>();
 
+  let tokenExpired = false;
   try {
     [me, them] = await Promise.all([
       ftFetch<ApiUser>(`/v2/me`, accessToken, { ttl: TTL.ranking }),
@@ -92,13 +151,16 @@ export default async function CompareData({
         { ttl: TTL.ranking },
       ),
     ]);
-    [myProjects, theirProjects] = await Promise.all([
+    [myProjects, theirProjects, allCursusXP] = await Promise.all([
       fetchAllProjects(myUserId, cursusId, accessToken),
       fetchAllProjects(them.id, cursusId, accessToken),
+      fetchAllCursusProjectXP(cursusId, accessToken),
     ]);
   } catch (e) {
-    error = e instanceof Error ? e.message : String(e);
+    if (e instanceof TokenExpiredError) tokenExpired = true;
+    else error = e instanceof Error ? e.message : String(e);
   }
+  if (tokenExpired) redirect("/api/auth/logout");
 
   const myLevel =
     me?.cursus_users?.find((c) => c.cursus_id === cursusId)?.level ?? 0;
@@ -111,13 +173,38 @@ export default async function CompareData({
   const theirValidated = theirProjects.filter((p) => p["validated?"] === true);
   const myById = new Map(myValidated.map((p) => [p.project.id, p]));
   const theirById = new Map(theirValidated.map((p) => [p.project.id, p]));
+  // Secondary indexes for matching exam variants (same name, different project.id per campus/session)
+  const myBySlug = new Map(myValidated.map((p) => [p.project.slug, p]));
+  const theirBySlug = new Map(theirValidated.map((p) => [p.project.slug, p]));
+  // parent_id lookup: child project → map keyed by parent's ID
+  const myByParentId = new Map(
+    myValidated.filter((p) => p.project.parent_id != null).map((p) => [p.project.parent_id!, p]),
+  );
+  const theirByParentId = new Map(
+    theirValidated.filter((p) => p.project.parent_id != null).map((p) => [p.project.parent_id!, p]),
+  );
+
+  const findMyMatch = (tp: ProjectsUser): ProjectsUser | undefined =>
+    myById.get(tp.project.id) ??
+    myBySlug.get(tp.project.slug) ??
+    myByParentId.get(tp.project.id) ??
+    (tp.project.parent_id != null ? myById.get(tp.project.parent_id) : undefined);
+
+  const findTheirMatch = (mp: ProjectsUser): boolean =>
+    theirById.has(mp.project.id) ||
+    theirBySlug.has(mp.project.slug) ||
+    theirByParentId.has(mp.project.id) ||
+    (mp.project.parent_id != null ? theirById.has(mp.project.parent_id) : false);
 
   type Both = {
     projectId: number;
     name: string;
     myMark: number | null;
     theirMark: number | null;
+    myXp: number | null;
+    theirXp: number | null;
     diff: number;
+    xpGain: number; // XP à gagner en améliorant ce projet
   };
   const toDo: ProjectsUser[] = [];
   const toRetry: Both[] = [];
@@ -125,7 +212,7 @@ export default async function CompareData({
   const onlyYou: ProjectsUser[] = [];
 
   for (const tp of theirValidated) {
-    const mp = myById.get(tp.project.id);
+    const mp = findMyMatch(tp);
     if (!mp) {
       toDo.push(tp);
     } else {
@@ -136,15 +223,58 @@ export default async function CompareData({
         name: tp.project.name,
         myMark: mp.final_mark,
         theirMark: tp.final_mark,
+        myXp: projectXP(mp),
+        theirXp: projectXP(tp),
         diff: their - my,
+        xpGain: (projectXP(tp) ?? 0) - (projectXP(mp) ?? 0),
       };
       if (their > my) toRetry.push(row);
       else if (my > their) youAhead.push(row);
     }
   }
   for (const mp of myValidated) {
-    if (!theirById.has(mp.project.id)) onlyYou.push(mp);
+    if (!findTheirMatch(mp)) onlyYou.push(mp);
   }
+
+  // Build projectBaseXPMap from batch-fetched cursus XP; fallback for missing IDs
+  const projectBaseXPMap = new Map<number, number>(allCursusXP);
+  if (!error) {
+    const missingIds = [
+      ...new Set([
+        ...toDo.map((p) => p.project.id),
+        ...toRetry.map((p) => p.projectId),
+      ]),
+    ].filter((id) => !projectBaseXPMap.has(id));
+    if (missingIds.length > 0) {
+      const xps = await Promise.all(missingIds.map((id) => fetchProjectBaseXP(id, accessToken)));
+      missingIds.forEach((id, i) => {
+        if (xps[i] !== null) projectBaseXPMap.set(id, xps[i]!);
+      });
+    }
+  }
+
+  type PriorityItem =
+    | { kind: "todo"; project: ProjectsUser; impact: number; baseXP: number | null }
+    | { kind: "retry"; project: Both; impact: number; baseXP: number | null; calcXpGain: number | null };
+
+  const prioritized: PriorityItem[] = [
+    ...toDo.map((p) => {
+      const baseXP = projectBaseXPMap.get(p.project.id) ?? null;
+      const impact =
+        projectXP(p) ??
+        (baseXP != null ? Math.round(baseXP * Math.min(p.final_mark ?? 100, 125) / 100) : (p.final_mark ?? 0) * 15);
+      return { kind: "todo" as const, project: p, impact, baseXP };
+    }),
+    ...toRetry.map((p) => {
+      const baseXP = projectBaseXPMap.get(p.projectId) ?? null;
+      const calcXpGain = baseXP != null ? Math.round(baseXP * p.diff / 100) : null;
+      const impact =
+        p.xpGain > 0 ? p.xpGain :
+        calcXpGain != null && calcXpGain > 0 ? calcXpGain :
+        p.diff * 10;
+      return { kind: "retry" as const, project: p, impact, baseXP, calcXpGain };
+    }),
+  ].sort((a, b) => b.impact - a.impact);
 
   toDo.sort((a, b) => (b.final_mark ?? 0) - (a.final_mark ?? 0));
   toRetry.sort((a, b) => b.diff - a.diff);
@@ -154,6 +284,7 @@ export default async function CompareData({
   const myL = fmtLevel(myLevel);
   const theirL = fmtLevel(theirLevel);
   const projDiff = theirValidated.length - myValidated.length;
+
 
   if (error) {
     return <pre className="err">{error}</pre>;
@@ -255,56 +386,66 @@ export default async function CompareData({
         </div>
       </section>
 
-      {toDo.length + toRetry.length > 0 && (
+      {prioritized.length > 0 && (
         <section className="plan">
           <div className="plan-header">
             <h2 className="plan-title">Plan d'action</h2>
             <p className="plan-sub">
-              Voici comment tu peux rattraper {them.login}.
+              Classé par XP — commence par le #1 pour rattraper {them.login} le plus vite possible.
             </p>
           </div>
 
-          {toDo.length > 0 && (
-            <div className="plan-block">
-              <div className="plan-block-head">
-                <span className="plan-tag todo">A RENDRE</span>
-                <span className="plan-count">{toDo.length} projets</span>
-              </div>
-              <div className="prj-cards">
-                {toDo.map((p) => (
-                  <div key={p.id} className="prj-card">
-                    <div className="prj-card-name">{p.project.name}</div>
-                    <div className="prj-card-action">
-                      <span className="prj-card-hint">son score</span>
-                      <MarkChip mark={p.final_mark} />
+          <div className="prj-cards">
+            {prioritized.map((item, i) => {
+              const name = item.kind === "todo" ? item.project.project.name : item.project.name;
+              const xpGainVal =
+                item.kind === "todo"
+                  ? item.baseXP != null
+                    ? Math.round(item.baseXP * Math.min(item.project.final_mark ?? 100, 125) / 100)
+                    : null
+                  : item.baseXP != null
+                    ? (item.calcXpGain ?? item.project.xpGain)
+                    : item.project.xpGain > 0
+                      ? item.project.xpGain
+                      : null;
+              return (
+                <div
+                  key={item.kind === "todo" ? item.project.id : item.project.projectId}
+                  className="prj-card prj-card-priority"
+                >
+                  <div className="prj-priority-num">#{i + 1}</div>
+                  <div className="prj-card-body">
+                    <div className="prj-card-top">
+                      <span className={`plan-tag ${item.kind === "todo" ? "todo" : "retry"}`}>
+                        {item.kind === "todo" ? "À RENDRE" : "À RETRY"}
+                      </span>
+                    </div>
+                    <div className="prj-card-name">{name}</div>
+                    <div className="prj-data-row">
+                      <span className="prj-marks-flow">
+                        {item.kind === "todo" ? (
+                          <>
+                            <span className="prj-card-hint">{them.login}</span>
+                            <MarkChip mark={item.project.final_mark} />
+                          </>
+                        ) : (
+                          <>
+                            <MarkChip mark={item.project.myMark} />
+                            <span className="prj-arrow">→</span>
+                            <MarkChip mark={item.project.theirMark} />
+                            <span className="prj-delta">+{item.project.diff} pts</span>
+                          </>
+                        )}
+                      </span>
+                      {xpGainVal != null && (
+                        <span className="prj-xp-badge">+{fmtXP(xpGainVal)} XP</span>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {toRetry.length > 0 && (
-            <div className="plan-block">
-              <div className="plan-block-head">
-                <span className="plan-tag retry">A RETRY</span>
-                <span className="plan-count">{toRetry.length} projets</span>
-              </div>
-              <div className="prj-cards">
-                {toRetry.map((p) => (
-                  <div key={p.projectId} className="prj-card">
-                    <div className="prj-card-name">{p.name}</div>
-                    <div className="prj-card-marks">
-                      <MarkChip mark={p.myMark} />
-                      <span className="prj-arrow">→</span>
-                      <MarkChip mark={p.theirMark} />
-                      <span className="prj-delta">+{p.diff}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              );
+            })}
+          </div>
         </section>
       )}
 

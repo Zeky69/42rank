@@ -638,6 +638,33 @@ h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; }
   letter-spacing: 0.12em;
   color: #6b7280;
 }
+.vs2-xp-gap {
+  margin-top: 10px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid;
+}
+.vs2-xp-gap.pos { background: rgba(74,222,128,0.12); color: #4ade80; border-color: rgba(74,222,128,0.3); }
+.vs2-xp-gap.neg { background: rgba(248,113,113,0.12); color: #f87171; border-color: rgba(248,113,113,0.3); }
+.vs2-xp-gap.neu { background: rgba(255,255,255,0.06); color: #cbd5e1; border-color: #1f2937; }
+.vs2-xp-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #4b5563;
+  margin-top: 3px;
+}
+.vs2-xp-total {
+  font-size: 12px;
+  font-weight: 700;
+  color: #00d4d6;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+  margin-top: 2px;
+}
 
 /* ============ KPI STRIP ============ */
 .kpi-strip {
@@ -695,6 +722,31 @@ h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; }
 }
 .plan-sub { margin: 6px 0 0; color: #9ca3af; font-size: 14px; }
 
+.plan-xp-needed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px 18px;
+  background: rgba(248, 113, 113, 0.07);
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+.plan-xp-needed-label {
+  font-size: 13px;
+  color: #9ca3af;
+  flex: 1;
+  min-width: 0;
+}
+.plan-xp-needed-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fca5a5;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .plan-block { margin-top: 22px; }
 .plan-block-head {
   display: flex;
@@ -739,35 +791,69 @@ h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; }
   border-color: #334155;
   background: rgba(255,255,255,0.05);
 }
-.prj-card-name {
-  font-weight: 600;
-  color: #f1f5f9;
-  font-size: 14px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+
+/* Priority cards (unified list) */
+.prj-card-priority {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
 }
-.prj-card-action {
+
+.prj-priority-num {
+  font-size: 18px;
+  font-weight: 800;
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(0,186,188,0.5);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.prj-card-priority:nth-child(1) .prj-priority-num { -webkit-text-stroke-color: #00d4d6; color: #00d4d6; }
+.prj-card-priority:nth-child(2) .prj-priority-num { -webkit-text-stroke-color: rgba(0,212,214,0.7); }
+.prj-card-priority:nth-child(3) .prj-priority-num { -webkit-text-stroke-color: rgba(0,212,214,0.5); }
+
+.prj-card-body {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  flex-shrink: 0;
+  gap: 6px;
+  min-width: 0;
 }
-.prj-card-hint {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #6b7280;
+
+.prj-card-top {
+  margin-bottom: 4px;
 }
-.prj-card-marks {
+
+.prj-card-name {
+  font-weight: 700;
+  color: #f1f5f9;
+  font-size: 15px;
+  margin-bottom: 7px;
+  line-height: 1.3;
+}
+
+.prj-data-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.prj-marks-flow {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
+}
+
+.prj-card-hint {
+  font-size: 11px;
+  color: #6b7280;
   flex-shrink: 0;
 }
-.prj-arrow { color: #6b7280; font-size: 14px; }
+.prj-arrow { color: #6b7280; font-size: 13px; }
 .prj-delta {
   padding: 2px 8px;
   border-radius: 999px;
@@ -778,6 +864,19 @@ h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; }
   font-variant-numeric: tabular-nums;
 }
 .prj-delta.pos { background: rgba(74, 222, 128, 0.18); color: #4ade80; }
+
+.prj-xp-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(0, 186, 188, 0.12);
+  border: 1px solid rgba(0, 186, 188, 0.3);
+  color: #00d4d6;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 /* ============ MARK CHIPS (color-coded) ============ */
 .mark-chip {

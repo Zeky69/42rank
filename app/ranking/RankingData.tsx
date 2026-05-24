@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ftFetch, TTL } from "@/lib/ft-api";
+import { redirect } from "next/navigation";
+import { ftFetch, TTL, TokenExpiredError } from "@/lib/ft-api";
 import ClickableAvatar from "./ClickableAvatar";
 
 const PAGE_SIZE = 100;
@@ -146,6 +147,7 @@ export default async function RankingData({
   let rows: CursusUserRow[] = [];
   let rawCount = 0;
   let error: string | null = null;
+  let tokenExpired = false;
   try {
     const batch = await fetchRankingPage(
       campusId,
@@ -157,8 +159,10 @@ export default async function RankingData({
     rows = batch;
     rawCount = batch.length;
   } catch (e) {
-    error = e instanceof Error ? e.message : String(e);
+    if (e instanceof TokenExpiredError) tokenExpired = true;
+    else error = e instanceof Error ? e.message : String(e);
   }
+  if (tokenExpired) redirect("/api/auth/logout");
 
   const startIdx = (currentPage - 1) * PAGE_SIZE;
   const hasNext = rawCount === PAGE_SIZE;

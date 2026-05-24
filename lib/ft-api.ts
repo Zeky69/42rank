@@ -1,3 +1,10 @@
+export class TokenExpiredError extends Error {
+  constructor() {
+    super("Access token expired");
+    this.name = "TokenExpiredError";
+  }
+}
+
 type CacheEntry = { data: unknown; expires: number };
 
 const cache = new Map<string, CacheEntry>();
@@ -51,6 +58,7 @@ export async function ftFetch<T = unknown>(
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) {
+        if (res.status === 401) throw new TokenExpiredError();
         const body = await res.text();
         const stale = cache.get(key);
         if (stale) {

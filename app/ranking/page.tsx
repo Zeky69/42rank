@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { ftFetch, TTL } from "@/lib/ft-api";
+import { ftFetch, TTL, TokenExpiredError } from "@/lib/ft-api";
 import { recordActivity } from "@/lib/stats";
 import RankingData from "./RankingData";
 import RankingSkeleton from "./RankingSkeleton";
@@ -68,7 +68,13 @@ export default async function RankingPage({
     searchParams.page ? parseInt(searchParams.page, 10) || 1 : 1,
   );
 
-  const campuses = await fetchAllCampuses(accessToken!);
+  let campuses: Campus[] = [];
+  try {
+    campuses = await fetchAllCampuses(accessToken!);
+  } catch (e) {
+    if (e instanceof TokenExpiredError) redirect("/api/auth/logout");
+    throw e;
+  }
   const poolYears = buildPoolYears();
   const selectedCampusName =
     campuses.find((c) => c.id === selectedCampusId)?.name ??
