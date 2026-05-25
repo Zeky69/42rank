@@ -98,3 +98,55 @@ export function cacheInvalidate(prefix?: string) {
     if (key.startsWith(prefix)) cache.delete(key);
   }
 }
+
+// ── XP / Progression ─────────────────────────────────────────────────────────
+
+export type XpEvent = { created_at: string; experience: number };
+export type LevelPoint = { date: string; level: number };
+
+export function xpToLevel(xp: number): number {
+  return (Math.sqrt(84 * xp + 3025) - 55) / 42;
+}
+
+export function computeLevelPoints(events: XpEvent[]): LevelPoint[] {
+  let cumXp = 0;
+  return events.map((e) => {
+    cumXp += e.experience;
+    return { date: e.created_at, level: parseFloat(xpToLevel(cumXp).toFixed(4)) };
+  });
+}
+
+export function getXpCache(userId: number, cursusId: number): XpEvent[] | null {
+  const key = `xp:${userId}:${cursusId}`;
+  const hit = cache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.data as XpEvent[];
+  return null;
+}
+
+export function setXpCache(userId: number, cursusId: number, events: XpEvent[]): void {
+  cache.set(`xp:${userId}:${cursusId}`, {
+    data: events,
+    expires: Date.now() + TTL.projects,
+  });
+}
+
+export async function fetchExperiencePage(
+  userId: number,
+  cursusId: number,
+  page: number,
+  accessToken: string,
+): Promise<{ events: XpEvent[]; total: number }> {
+  const path = `/v2/users/${userId}/experiences?filter[cursus_id]=${cursusId}&sort=created_at&page[size]=100&page[number]=${page}`;
+  await acquireSlot(accessToken);
+  const res = await fetch(`https://api.intra.42.fr${path}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new TokenExpiredError();
+    throw new Error(`42 API ${res.status} ${path} — ${(await res.text()).slice(0, 200)}`);
+  }
+  const total = parseInt(res.headers.get("X-Total") ?? "0", 10);
+  const events = (await res.json()) as XpEvent[];
+  cache.set(path, { data: events, expires: Date.now() + TTL.projects });
+  return { events, total };
+}
