@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import CompareData from "./CompareData";
 import CompareSkeleton from "./CompareSkeleton";
+import ProgressionChartServer from "./ProgressionChartServer";
+import ChartSkeleton from "./ChartSkeleton";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +56,15 @@ export default async function ComparePage({
           accessToken={accessToken!}
           myUserId={userId!}
           cursusId={cursusId!}
+          theirLogin={theirLogin}
+        />
+      </Suspense>
+
+      <Suspense key={`chart-${theirLogin}`} fallback={<ChartSkeleton />}>
+        <ProgressionChartServer
+          accessToken={accessToken!}
+          myUserId={userId!}
+          myLogin={myLogin!}
           theirLogin={theirLogin}
         />
       </Suspense>
