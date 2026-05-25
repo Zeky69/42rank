@@ -143,7 +143,8 @@ export async function fetchExperiencePage(
   });
   if (!res.ok) {
     if (res.status === 401) throw new TokenExpiredError();
-    throw new Error(`42 API ${res.status} ${path} — ${(await res.text()).slice(0, 200)}`);
+    const body = await res.text();
+    throw new Error(`42 API ${res.status} ${path} — ${body.slice(0, 200)}`);
   }
   const total = parseInt(res.headers.get("X-Total") ?? "0", 10);
   const events = (await res.json()) as XpEvent[];
