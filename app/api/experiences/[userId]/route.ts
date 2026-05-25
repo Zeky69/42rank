@@ -1,13 +1,58 @@
 import { getSession } from "@/lib/session";
-import {
-  fetchExperiencePage,
-  computeLevelPoints,
-  getXpCache,
-  setXpCache,
-  TokenExpiredError,
-} from "@/lib/ft-api";
+import { ftFetch, TTL, xpToLevel, TokenExpiredError } from "@/lib/ft-api";
+import type { LevelPoint } from "@/lib/ft-api";
 
 const CURSUS_ID = 21;
+
+type ProjectRow = {
+  "validated?": boolean | null;
+  marked_at: string | null;
+  xp?: number;
+  experience_points?: number;
+  cursus_ids: number[];
+};
+
+async function fetchProjects(userId: number, token: string): Promise<ProjectRow[]> {
+  const all: ProjectRow[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const batch = await ftFetch<ProjectRow[]>(
+      `/v2/users/${userId}/projects_users?page[size]=100&page[number]=${page}`,
+      token,
+      { ttl: TTL.projects },
+    );
+    all.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return all;
+}
+
+function toProgressionPoints(projects: ProjectRow[]): LevelPoint[] {
+  const validated = projects
+    .filter(
+      (p) =>
+        p["validated?"] === true &&
+        p.marked_at !== null &&
+        p.cursus_ids.includes(CURSUS_ID),
+    )
+    .sort(
+      (a, b) =>
+        new Date(a.marked_at!).getTime() - new Date(b.marked_at!).getTime(),
+    );
+
+  let cumXp = 0;
+  const points: LevelPoint[] = [];
+  for (const p of validated) {
+    const xp = p.xp ?? p.experience_points ?? 0;
+    if (xp > 0) {
+      cumXp += xp;
+      points.push({
+        date: p.marked_at!,
+        level: parseFloat(xpToLevel(cumXp).toFixed(4)),
+      });
+    }
+  }
+  return points;
+}
 
 export async function GET(
   _req: Request,
@@ -30,39 +75,11 @@ export async function GET(
         controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
 
       try {
-        const cached = getXpCache(userId, CURSUS_ID);
-        if (cached) {
-          send({ type: "total", pages: 0 });
-          send({ type: "data", points: computeLevelPoints(cached) });
-          return;
-        }
-
-        const { events: firstBatch, total } = await fetchExperiencePage(
-          userId,
-          CURSUS_ID,
-          1,
-          token,
-        );
-
-        const totalPages = Math.max(1, Math.ceil(total / 100));
-        send({ type: "total", pages: totalPages });
-
-        const allEvents = [...firstBatch];
-        send({ type: "progress", done: 1, total: totalPages });
-
-        for (let page = 2; page <= totalPages; page++) {
-          const { events } = await fetchExperiencePage(
-            userId,
-            CURSUS_ID,
-            page,
-            token,
-          );
-          allEvents.push(...events);
-          send({ type: "progress", done: page, total: totalPages });
-        }
-
-        setXpCache(userId, CURSUS_ID, allEvents);
-        send({ type: "data", points: computeLevelPoints(allEvents) });
+        send({ type: "total", pages: 1 });
+        const projects = await fetchProjects(userId, token);
+        const points = toProgressionPoints(projects);
+        send({ type: "progress", done: 1, total: 1 });
+        send({ type: "data", points });
       } catch (e) {
         if (e instanceof TokenExpiredError) {
           send({ type: "error", message: "token_expired" });
