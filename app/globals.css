@@ -1775,3 +1775,59 @@ h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; }
   .prj-cards { grid-template-columns: 1fr; }
   .plan { padding: 18px; }
 }
+
+/* ── Progression chart ───────────────────────────────────────────────── */
+
+.progression-section {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid #1f2937;
+}
+
+.progression-title {
+  margin: 0 0 20px;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.progression-chart-wrap {
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid #1f2937;
+  padding: 12px 4px 4px;
+}
+
+.chart-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 60px 0;
+}
+
+.chart-progress-bar {
+  width: 100%;
+  max-width: 400px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.chart-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4f8ef7, #7dd3fc);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.chart-progress-label {
+  margin: 0;
+  font-size: 13px;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+}
