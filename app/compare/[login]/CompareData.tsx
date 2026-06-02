@@ -150,7 +150,7 @@ export default async function CompareData({
   let tokenExpired = false;
   try {
     [me, them] = await Promise.all([
-      ftFetch<ApiUser>(`/v2/me`, accessToken, { ttl: TTL.ranking }),
+      ftFetch<ApiUser>(`/v2/users/${myUserId}`, accessToken, { ttl: TTL.ranking }),
       ftFetch<ApiUser>(
         `/v2/users/${encodeURIComponent(theirLogin)}`,
         accessToken,
