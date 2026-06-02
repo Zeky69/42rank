@@ -118,7 +118,6 @@ export default async function RankingPage({
             userId={userId!}
             cursusId={cursusId}
             poolYear={poolYear!}
-            level={session.level}
           />
         </Suspense>
       </header>

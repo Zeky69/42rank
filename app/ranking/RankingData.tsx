@@ -40,7 +40,7 @@ async function fetchRankingPage(
   cursusId: number,
   pageNum: number,
   token: string,
-): Promise<CursusUserRow[]> {
+): Promise<{ rows: CursusUserRow[]; rawCount: number }> {
   const { from, to } = poolYearDateRange(poolYear);
   const path =
     `/v2/cursus_users` +
@@ -52,7 +52,32 @@ async function fetchRankingPage(
   const batch = await ftFetch<CursusUserRow[]>(path, token, {
     ttl: TTL.ranking,
   });
-  return batch.filter((cu) => cu.user.pool_year === poolYear);
+  // rawCount = taille brute de la page API ; sert à savoir s'il y a une page
+  // suivante. Le filtre pool_year ne doit pas influencer cette décision,
+  // sinon la pagination disparaît dès qu'une page contient d'autres promos.
+  return {
+    rows: batch.filter((cu) => cu.user.pool_year === poolYear),
+    rawCount: batch.length,
+  };
+}
+
+// Nombre de personnes (filtrées par promo) classées avant la page courante.
+// Sert à numéroter les rangs de façon contiguë (#1, #2, … sans trou), en
+// tenant compte du filtrage pool_year. Les pages sont mises en cache, donc
+// la navigation séquentielle ne re-télécharge rien.
+async function countBefore(
+  campusId: number | null,
+  poolYear: string,
+  cursusId: number,
+  page: number,
+  token: string,
+): Promise<number> {
+  let total = 0;
+  for (let p = 1; p < page; p++) {
+    const { rows } = await fetchRankingPage(campusId, poolYear, cursusId, p, token);
+    total += rows.length;
+  }
+  return total;
 }
 
 function daysUntil(iso: string | null): number | null {
@@ -149,33 +174,37 @@ export default async function RankingData({
   const currentPage = Math.max(1, page);
   let rows: CursusUserRow[] = [];
   let rawCount = 0;
+  let offset = 0;
   let error: string | null = null;
   let tokenExpired = false;
   try {
-    const batch = await fetchRankingPage(
+    const result = await fetchRankingPage(
       campusId,
       poolYear,
       cursusId,
       currentPage,
       accessToken,
     );
-    rows = batch;
-    rawCount = batch.length;
+    rows = result.rows;
+    rawCount = result.rawCount;
+    offset = await countBefore(campusId, poolYear, cursusId, currentPage, accessToken);
   } catch (e) {
     if (e instanceof TokenExpiredError) tokenExpired = true;
     else error = e instanceof Error ? e.message : String(e);
   }
   if (tokenExpired) redirect("/api/auth/logout");
 
-  const startIdx = (currentPage - 1) * PAGE_SIZE;
   const hasNext = rawCount === PAGE_SIZE;
 
   const showPodium = currentPage === 1 && rows.length >= 3;
   const top3 = showPodium ? rows.slice(0, 3) : [];
   const rest = showPodium ? rows.slice(3) : rows;
+  // Rang du premier élément de la grille "rest" : après le podium en page 1,
+  // sinon juste après les pages précédentes.
+  const restBaseRank = showPodium ? offset + 4 : offset + 1;
 
   const myIdx = rows.findIndex((r) => r.user.login === login);
-  const myRankOnPage = myIdx >= 0 ? startIdx + myIdx + 1 : null;
+  const myRankOnPage = myIdx >= 0 ? offset + myIdx + 1 : null;
   const avgLevel =
     rows.length > 0 ? rows.reduce((s, r) => s + r.level, 0) / rows.length : 0;
 
@@ -249,11 +278,11 @@ export default async function RankingData({
           <h2 className="section-title">
             {currentPage === 1
               ? "Suite du classement"
-              : `Rangs ${4 + startIdx} - ${3 + startIdx + rest.length}`}
+              : `Rangs ${restBaseRank} - ${restBaseRank + rest.length - 1}`}
           </h2>
           <section className="grid">
             {rest.map((cu, i) => {
-              const rank = startIdx + 4 + i;
+              const rank = restBaseRank + i;
               const isMe = cu.user.login === login;
               const lvlInt = Math.floor(cu.level);
               const lvlPct = Math.round((cu.level - lvlInt) * 100);

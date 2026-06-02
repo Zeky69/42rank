@@ -62,7 +62,6 @@ export async function GET(req: NextRequest) {
   session.poolYear = me.pool_year;
   session.cursusId = main42cursus?.cursus_id ?? 21;
   session.image = me.image?.link;
-  session.level = main42cursus?.level;
   await session.save();
   void recordActivity(me.id);
 

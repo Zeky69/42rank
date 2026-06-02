@@ -1,7 +1,8 @@
-import { ftFetch, ftFetchTotal, TTL } from "@/lib/ft-api";
+import { ftFetch, TTL } from "@/lib/ft-api";
 
-type ApiUser = {
-  cursus_users?: { cursus_id: number; level: number }[];
+type Row = {
+  level: number;
+  user: { id: number; pool_year?: string | null };
 };
 
 type Props = {
@@ -9,8 +10,6 @@ type Props = {
   userId: number;
   cursusId: number;
   poolYear: string;
-  // Niveau connu via la session (évite une requête). Optionnel : fallback /v2/users.
-  level?: number;
 };
 
 function poolYearDateRange(poolYear: string): { from: string; to: string } {
@@ -18,36 +17,43 @@ function poolYearDateRange(poolYear: string): { from: string; to: string } {
   return { from: `${y}-06-01`, to: `${y + 1}-08-31` };
 }
 
+const PAGE_SIZE = 100;
+
+// Rang mondial exact : on parcourt le classement (tous campus) trié par niveau,
+// filtré sur la promo, et on compte combien de personnes sont classées avant
+// toi jusqu'à te trouver. Mêmes pages que le classement global → cache partagé.
 export default async function GlobalRank({
   accessToken,
   userId,
   cursusId,
   poolYear,
-  level,
 }: Props) {
-  let myLevel = level ?? 0;
-
   try {
-    // Fallback si le niveau n'est pas en session (ancienne session) : 1 requête
-    // mise en cache et partagée avec la page de comparaison.
-    if (!myLevel) {
-      const me = await ftFetch<ApiUser>(`/v2/users/${userId}`, accessToken, {
-        ttl: TTL.ranking,
-      });
-      myLevel = me.cursus_users?.find((c) => c.cursus_id === cursusId)?.level ?? 0;
-    }
-    if (myLevel <= 0) return null;
-
-    // X-Total des cursus_users de niveau >= au mien sur la promo = mon rang mondial.
     const { from, to } = poolYearDateRange(poolYear);
-    const path =
-      `/v2/cursus_users` +
-      `?filter[cursus_id]=${cursusId}` +
-      `&range[begin_at]=${from},${to}` +
-      `&range[level]=${myLevel},100` +
-      `&page[size]=1`;
-    const rank = await ftFetchTotal(path, accessToken, { ttl: TTL.ranking });
-    if (rank <= 0) return null;
+    let before = 0;
+    let rank: number | null = null;
+
+    for (let page = 1; page <= 20; page++) {
+      const path =
+        `/v2/cursus_users` +
+        `?filter[cursus_id]=${cursusId}` +
+        `&range[begin_at]=${from},${to}` +
+        `&sort=-level` +
+        `&page[size]=${PAGE_SIZE}&page[number]=${page}`;
+      const batch = await ftFetch<Row[]>(path, accessToken, { ttl: TTL.ranking });
+
+      for (const cu of batch) {
+        if (cu.user.pool_year !== poolYear) continue;
+        if (cu.user.id === userId) {
+          rank = before + 1;
+          break;
+        }
+        before++;
+      }
+      if (rank !== null || batch.length < PAGE_SIZE) break;
+    }
+
+    if (rank === null) return null;
 
     return (
       <div className="global-rank">
@@ -56,7 +62,7 @@ export default async function GlobalRank({
       </div>
     );
   } catch {
-    // Widget annexe : on n'affiche rien en cas d'erreur (token expiré géré ailleurs).
+    // Widget annexe : rien en cas d'erreur (token expiré géré ailleurs).
     return null;
   }
 }

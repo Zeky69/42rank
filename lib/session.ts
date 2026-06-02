@@ -10,7 +10,6 @@ export type SessionData = {
   poolYear?: string;
   cursusId?: number;
   image?: string;
-  level?: number;
 };
 
 const sessionOptions: SessionOptions = {

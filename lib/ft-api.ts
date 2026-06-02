@@ -80,50 +80,6 @@ export async function ftFetch<T = unknown>(
   return promise as Promise<T>;
 }
 
-// Renvoie l'en-tête X-Total d'un endpoint paginé (nombre total d'éléments)
-// sans rapatrier les données. Mise en cache par chemin, comme ftFetch.
-export async function ftFetchTotal(
-  path: string,
-  accessToken: string,
-  options: FetchOptions = {},
-): Promise<number> {
-  const ttl = options.ttl ?? DEFAULT_TTL;
-  const key = `total:${path}`;
-  const now = Date.now();
-
-  if (!options.force) {
-    const hit = cache.get(key);
-    if (hit && hit.expires > now) return hit.data as number;
-  }
-
-  const flying = inflight.get(key);
-  if (flying) return flying as Promise<number>;
-
-  const promise = (async () => {
-    await acquireSlot(accessToken);
-    try {
-      const res = await fetch(`https://api.intra.42.fr${path}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!res.ok) {
-        if (res.status === 401) throw new TokenExpiredError();
-        const stale = cache.get(key);
-        if (stale) return stale.data as number;
-        const body = await res.text();
-        throw new Error(`42 API ${res.status} ${path} — ${body.slice(0, 200)}`);
-      }
-      const total = parseInt(res.headers.get("X-Total") ?? "0", 10);
-      cache.set(key, { data: total, expires: Date.now() + ttl });
-      return total;
-    } finally {
-      inflight.delete(key);
-    }
-  })();
-
-  inflight.set(key, promise);
-  return promise as Promise<number>;
-}
-
 export function cacheStats() {
   let live = 0;
   const now = Date.now();
