@@ -6,6 +6,7 @@ import { recordActivity } from "@/lib/stats";
 import RankingData from "./RankingData";
 import RankingSkeleton from "./RankingSkeleton";
 import Filters from "./Filters";
+import GlobalRank from "./GlobalRank";
 
 export const dynamic = "force-dynamic";
 
@@ -59,9 +60,12 @@ export default async function RankingPage({
     );
   }
 
-  const selectedCampusId = searchParams.campus
-    ? parseInt(searchParams.campus, 10)
-    : campusId;
+  const isGlobal = searchParams.campus === "all";
+  const selectedCampusId = isGlobal
+    ? null
+    : searchParams.campus
+      ? parseInt(searchParams.campus, 10)
+      : campusId;
   const selectedPoolYear = searchParams.pool ?? poolYear;
   const selectedPage = Math.max(
     1,
@@ -76,13 +80,14 @@ export default async function RankingPage({
     throw e;
   }
   const poolYears = buildPoolYears();
-  const selectedCampusName =
-    campuses.find((c) => c.id === selectedCampusId)?.name ??
-    (selectedCampusId === campusId
-      ? (campusName ?? `Campus ${selectedCampusId}`)
-      : `Campus ${selectedCampusId}`);
+  const selectedCampusName = isGlobal
+    ? "Tous les campus"
+    : (campuses.find((c) => c.id === selectedCampusId)?.name ??
+      (selectedCampusId === campusId
+        ? (campusName ?? `Campus ${selectedCampusId}`)
+        : `Campus ${selectedCampusId}`));
 
-  const dataKey = `${selectedCampusId}-${selectedPoolYear}-${selectedPage}`;
+  const dataKey = `${isGlobal ? "all" : selectedCampusId}-${selectedPoolYear}-${selectedPage}`;
 
   return (
     <main className="wide">
@@ -95,17 +100,33 @@ export default async function RankingPage({
 
       <header className="hero">
         <div>
-          <h1>Classement</h1>
+          <h1>{isGlobal ? "Classement global" : "Classement"}</h1>
           <p className="sub">
             {selectedCampusName} · Piscine {selectedPoolYear}
           </p>
         </div>
+        <Suspense
+          fallback={
+            <div className="global-rank loading">
+              <span className="global-rank-num">#…</span>
+              <span className="global-rank-lbl">Rang mondial</span>
+            </div>
+          }
+        >
+          <GlobalRank
+            accessToken={accessToken!}
+            userId={userId!}
+            cursusId={cursusId}
+            poolYear={poolYear!}
+            level={session.level}
+          />
+        </Suspense>
       </header>
 
       <Filters
         campuses={campuses}
         poolYears={poolYears}
-        currentCampusId={selectedCampusId}
+        currentCampus={isGlobal ? "all" : String(selectedCampusId)}
         currentPoolYear={selectedPoolYear}
       />
 

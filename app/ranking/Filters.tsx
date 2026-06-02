@@ -8,14 +8,14 @@ type Campus = { id: number; name: string };
 type Props = {
   campuses: Campus[];
   poolYears: string[];
-  currentCampusId: number;
+  currentCampus: string;
   currentPoolYear: string;
 };
 
 export default function Filters({
   campuses,
   poolYears,
-  currentCampusId,
+  currentCampus,
   currentPoolYear,
 }: Props) {
   const router = useRouter();
@@ -36,10 +36,11 @@ export default function Filters({
         <span className="filter-k">Campus</span>
         <select
           className="filter-select"
-          value={currentCampusId}
+          value={currentCampus}
           onChange={(e) => update("campus", e.target.value)}
           disabled={pending}
         >
+          <option value="all">🌍 Global (tous les campus)</option>
           {campuses.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}

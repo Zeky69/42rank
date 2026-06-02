@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { ftFetch, TTL, TokenExpiredError } from "@/lib/ft-api";
 import { loadCursusXP, saveCursusXP } from "@/lib/cursus-xp-disk-cache";
 import ClickableAvatar from "../../ranking/ClickableAvatar";
+import ProfileLink from "../../ProfileLink";
 
 type ProjectsUser = {
   id: number;
@@ -312,7 +313,9 @@ export default async function CompareData({
             className="vs2-avatar"
           />
           <div className="vs2-tag">TOI</div>
-          <div className="vs2-login">{me.login}</div>
+          <div className="vs2-login">
+            <ProfileLink login={me.login} />
+          </div>
           <div className="vs2-lvl">
             <span className="vs2-lvl-num">{myL.int}</span>
             <span className="vs2-lvl-pct">.{myL.pct}</span>
@@ -357,7 +360,9 @@ export default async function CompareData({
             className="vs2-avatar"
           />
           <div className="vs2-tag them">RIVAL</div>
-          <div className="vs2-login">{them.login}</div>
+          <div className="vs2-login">
+            <ProfileLink login={them.login} />
+          </div>
           <div className="vs2-lvl">
             <span className="vs2-lvl-num">{theirL.int}</span>
             <span className="vs2-lvl-pct">.{theirL.pct}</span>

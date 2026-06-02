@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ftFetch, TTL, TokenExpiredError } from "@/lib/ft-api";
 import ClickableAvatar from "./ClickableAvatar";
+import ProfileLink from "../ProfileLink";
 
 const PAGE_SIZE = 100;
 
@@ -34,7 +35,7 @@ function poolYearDateRange(poolYear: string): { from: string; to: string } {
 }
 
 async function fetchRankingPage(
-  campusId: number,
+  campusId: number | null,
   poolYear: string,
   cursusId: number,
   pageNum: number,
@@ -43,8 +44,8 @@ async function fetchRankingPage(
   const { from, to } = poolYearDateRange(poolYear);
   const path =
     `/v2/cursus_users` +
-    `?filter[campus_id]=${campusId}` +
-    `&filter[cursus_id]=${cursusId}` +
+    `?filter[cursus_id]=${cursusId}` +
+    (campusId !== null ? `&filter[campus_id]=${campusId}` : "") +
     `&range[begin_at]=${from},${to}` +
     `&sort=-level` +
     `&page[size]=${PAGE_SIZE}&page[number]=${pageNum}`;
@@ -108,7 +109,9 @@ function PodiumSpot({
         fullName={fullName(cu)}
         className={`podium-avatar tier-${tier}`}
       />
-      <div className="podium-login">{cu.user.login}</div>
+      <div className="podium-login">
+        <ProfileLink login={cu.user.login} />
+      </div>
       <div className="podium-level">
         lvl <strong>{lvlInt}</strong>
         <span className="podium-pct">.{String(lvlPct).padStart(2, "0")}</span>
@@ -129,7 +132,7 @@ function PodiumSpot({
 type Props = {
   accessToken: string;
   login: string;
-  campusId: number;
+  campusId: number | null;
   poolYear: string;
   cursusId: number;
   page: number;
@@ -176,9 +179,11 @@ export default async function RankingData({
   const avgLevel =
     rows.length > 0 ? rows.reduce((s, r) => s + r.level, 0) / rows.length : 0;
 
+  const campusParam = campusId === null ? "all" : String(campusId);
+
   const buildPageHref = (p: number) => {
     const params = new URLSearchParams();
-    params.set("campus", String(campusId));
+    params.set("campus", campusParam);
     params.set("pool", poolYear);
     if (p > 1) params.set("page", String(p));
     return `/ranking?${params.toString()}`;
@@ -186,7 +191,7 @@ export default async function RankingData({
 
   const buildCompareHref = (otherLogin: string) => {
     const params = new URLSearchParams();
-    params.set("campus", String(campusId));
+    params.set("campus", campusParam);
     params.set("pool", poolYear);
     if (currentPage > 1) params.set("page", String(currentPage));
     return `/compare/${encodeURIComponent(otherLogin)}?${params.toString()}`;
@@ -271,7 +276,9 @@ export default async function RankingData({
                   </div>
 
                   <div className="card-head">
-                    <div className="login">{cu.user.login}</div>
+                    <div className="login">
+                      <ProfileLink login={cu.user.login} />
+                    </div>
                     <div className="fullname">{fullName(cu)}</div>
                   </div>
 
