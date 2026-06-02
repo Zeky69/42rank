@@ -10,7 +10,7 @@ import GlobalRank from "./GlobalRank";
 
 export const dynamic = "force-dynamic";
 
-type Campus = { id: number; name: string };
+type Campus = { id: number; name: string; country?: string };
 
 async function fetchAllCampuses(token: string): Promise<Campus[]> {
   const all: Campus[] = [];
@@ -20,7 +20,9 @@ async function fetchAllCampuses(token: string): Promise<Campus[]> {
       token,
       { ttl: TTL.longLived },
     );
-    all.push(...batch.map((c) => ({ id: c.id, name: c.name })));
+    all.push(
+      ...batch.map((c) => ({ id: c.id, name: c.name, country: c.country })),
+    );
     if (batch.length < 100) break;
   }
   return all;
@@ -127,6 +129,7 @@ export default async function RankingPage({
         poolYears={poolYears}
         currentCampus={isGlobal ? "all" : String(selectedCampusId)}
         currentPoolYear={selectedPoolYear}
+        myCampusId={campusId}
       />
 
       <Suspense key={dataKey} fallback={<RankingSkeleton />}>

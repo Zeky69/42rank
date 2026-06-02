@@ -2,14 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
+import CampusPicker from "./CampusPicker";
 
-type Campus = { id: number; name: string };
+type Campus = { id: number; name: string; country?: string };
 
 type Props = {
   campuses: Campus[];
   poolYears: string[];
   currentCampus: string;
   currentPoolYear: string;
+  myCampusId?: number;
 };
 
 export default function Filters({
@@ -17,6 +19,7 @@ export default function Filters({
   poolYears,
   currentCampus,
   currentPoolYear,
+  myCampusId,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -32,22 +35,16 @@ export default function Filters({
 
   return (
     <div className={`filters ${pending ? "pending" : ""}`}>
-      <label className="filter-label">
+      <div className="filter-label">
         <span className="filter-k">Campus</span>
-        <select
-          className="filter-select"
-          value={currentCampus}
-          onChange={(e) => update("campus", e.target.value)}
+        <CampusPicker
+          campuses={campuses}
+          currentCampus={currentCampus}
+          myCampusId={myCampusId}
           disabled={pending}
-        >
-          <option value="all">🌍 Global (tous les campus)</option>
-          {campuses.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
+          onSelect={(v) => update("campus", v)}
+        />
+      </div>
       <label className="filter-label">
         <span className="filter-k">Annee de piscine</span>
         <select
