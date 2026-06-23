@@ -7,6 +7,7 @@ import RankingData from "./RankingData";
 import RankingSkeleton from "./RankingSkeleton";
 import Filters from "./Filters";
 import GlobalRank from "./GlobalRank";
+import PromoStats from "./PromoStats";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export default async function RankingPage({
 
   const { accessToken, login, userId, campusId, campusName, poolYear, cursusId } =
     session;
-  if (userId) void recordActivity(userId);
+  if (userId) void recordActivity(userId, campusName);
 
   if (!campusId || !poolYear || !cursusId) {
     return (
@@ -131,6 +132,19 @@ export default async function RankingPage({
         currentPoolYear={selectedPoolYear}
         myCampusId={campusId}
       />
+
+      <Suspense
+        key={`promo-${isGlobal ? "all" : selectedCampusId}-${selectedPoolYear}`}
+        fallback={null}
+      >
+        <PromoStats
+          accessToken={accessToken!}
+          login={login!}
+          campusId={selectedCampusId}
+          poolYear={selectedPoolYear}
+          cursusId={cursusId}
+        />
+      </Suspense>
 
       <Suspense key={dataKey} fallback={<RankingSkeleton />}>
         <RankingData

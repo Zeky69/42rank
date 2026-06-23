@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { getStats } from "@/lib/stats";
 
+const WEEKDAYS = ["D", "L", "M", "M", "J", "V", "S"];
+
 const MOCK_USERS = [
   { login: "lparent",  level: "21.68", initial: "L", color: "#92400e" },
   { login: "fayache",  level: "18.34", initial: "F", color: "#1e3a5f" },
@@ -54,9 +56,18 @@ export default async function HomePage() {
   const session = await getSession();
   if (session.accessToken) redirect("/ranking");
 
-  const { total, activeNow } = await getStats();
+  const { total, activeNow, peak, daily, topCampus, retention } =
+    await getStats();
   const [gold, silver, bronze] = MOCK_USERS;
   const rest = MOCK_USERS.slice(3);
+
+  const dailyMax = Math.max(1, ...daily.map((d) => d.count));
+  const peakHour = peak
+    ? new Date(peak.at).toLocaleTimeString("fr-FR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
 
   return (
     <main className="lp">
@@ -151,7 +162,60 @@ export default async function HomePage() {
             <div className="lp-live-label lp-live-label-plain">membres depuis le lancement</div>
             <div className="lp-live-val lp-live-val-muted">{total}</div>
           </div>
+          {peak && (
+            <>
+              <div className="lp-live-divider" />
+              <div className="lp-live-card">
+                <div className="lp-live-label lp-live-label-plain">
+                  pic d'affluence{peakHour ? ` · ${peakHour}` : ""}
+                </div>
+                <div className="lp-live-val lp-live-val-muted">{peak.count}</div>
+              </div>
+            </>
+          )}
         </div>
+
+        {/* ── Fréquentation par jour ───────────────────────── */}
+        {daily.some((d) => d.count > 0) && (
+          <div className="lp-chart-card">
+            <div className="lp-chart-head">
+              <span className="lp-chart-title">Membres actifs / jour</span>
+              <span className="lp-chart-sub">14 derniers jours</span>
+            </div>
+            <div className="lp-chart-bars">
+              {daily.map((d) => {
+                const date = new Date(`${d.date}T00:00:00`);
+                return (
+                  <div key={d.date} className="lp-chart-col" title={`${d.date} · ${d.count}`}>
+                    <div className="lp-chart-bar-wrap">
+                      <div
+                        className="lp-chart-bar"
+                        style={{ height: `${(d.count / dailyMax) * 100}%` }}
+                      />
+                    </div>
+                    <span className="lp-chart-xlbl">{WEEKDAYS[date.getDay()]}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="lp-chart-foot">
+              {topCampus && (
+                <span className="lp-chart-pill">
+                  🏆 Campus n°1 · <strong>{topCampus.name}</strong> ({topCampus.count})
+                </span>
+              )}
+              {retention.returnedD1 > 0 && (
+                <span className="lp-chart-pill">
+                  🔁 {retention.returnedD1} revenus J+1 ·{" "}
+                  {Math.round(retention.rateD1 * 100)}% de rétention
+                </span>
+              )}
+              {retention.returnedD7 > 0 && (
+                <span className="lp-chart-pill">📅 {retention.returnedD7} revenus J+7</span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Features ────────────────────────────────────── */}
         <section className="lp-features">

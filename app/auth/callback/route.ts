@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
   session.cursusId = main42cursus?.cursus_id ?? 21;
   session.image = me.image?.link;
   await session.save();
-  void recordActivity(me.id);
+  void recordActivity(me.id, me.campus?.[0]?.name);
 
   return NextResponse.redirect(`${base}/ranking`);
 }
