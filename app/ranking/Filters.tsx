@@ -5,19 +5,24 @@ import { useTransition } from "react";
 import CampusPicker from "./CampusPicker";
 
 type Campus = { id: number; name: string; country?: string };
+type Cursus = { id: number; name: string };
 
 type Props = {
   campuses: Campus[];
+  cursuses: Cursus[];
   poolYears: string[];
   currentCampus: string;
+  currentCursus: string;
   currentPoolYear: string;
   myCampusId?: number;
 };
 
 export default function Filters({
   campuses,
+  cursuses,
   poolYears,
   currentCampus,
+  currentCursus,
   currentPoolYear,
   myCampusId,
 }: Props) {
@@ -45,6 +50,21 @@ export default function Filters({
           onSelect={(v) => update("campus", v)}
         />
       </div>
+      <label className="filter-label">
+        <span className="filter-k">Cursus</span>
+        <select
+          className="filter-select"
+          value={currentCursus}
+          onChange={(e) => update("cursus", e.target.value)}
+          disabled={pending}
+        >
+          {cursuses.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="filter-label">
         <span className="filter-k">Annee de piscine</span>
         <select

@@ -12,6 +12,7 @@ import PromoStats from "./PromoStats";
 export const dynamic = "force-dynamic";
 
 type Campus = { id: number; name: string; country?: string };
+type Cursus = { id: number; name: string };
 
 async function fetchAllCampuses(token: string): Promise<Campus[]> {
   const all: Campus[] = [];
@@ -29,6 +30,20 @@ async function fetchAllCampuses(token: string): Promise<Campus[]> {
   return all;
 }
 
+async function fetchAllCursus(token: string): Promise<Cursus[]> {
+  const all: Cursus[] = [];
+  for (let page = 1; page <= 3; page++) {
+    const batch = await ftFetch<Cursus[]>(
+      `/v2/cursus?page[size]=100&page[number]=${page}&sort=name`,
+      token,
+      { ttl: TTL.longLived },
+    );
+    all.push(...batch.map((c) => ({ id: c.id, name: c.name })));
+    if (batch.length < 100) break;
+  }
+  return all;
+}
+
 function buildPoolYears(): string[] {
   const current = new Date().getFullYear();
   const years: string[] = [];
@@ -39,7 +54,7 @@ function buildPoolYears(): string[] {
 export default async function RankingPage({
   searchParams,
 }: {
-  searchParams: { campus?: string; pool?: string; page?: string };
+  searchParams: { campus?: string; pool?: string; cursus?: string; page?: string };
 }) {
   const session = await getSession();
   if (!session.accessToken) redirect("/");
@@ -70,19 +85,29 @@ export default async function RankingPage({
       ? parseInt(searchParams.campus, 10)
       : campusId;
   const selectedPoolYear = searchParams.pool ?? poolYear;
+  const selectedCursusId = searchParams.cursus
+    ? parseInt(searchParams.cursus, 10) || cursusId
+    : cursusId;
   const selectedPage = Math.max(
     1,
     searchParams.page ? parseInt(searchParams.page, 10) || 1 : 1,
   );
 
   let campuses: Campus[] = [];
+  let cursuses: Cursus[] = [];
   try {
-    campuses = await fetchAllCampuses(accessToken!);
+    [campuses, cursuses] = await Promise.all([
+      fetchAllCampuses(accessToken!),
+      fetchAllCursus(accessToken!),
+    ]);
   } catch (e) {
     if (e instanceof TokenExpiredError) redirect("/api/auth/logout");
     throw e;
   }
   const poolYears = buildPoolYears();
+  const selectedCursusName =
+    cursuses.find((c) => c.id === selectedCursusId)?.name ??
+    `Cursus ${selectedCursusId}`;
   const selectedCampusName = isGlobal
     ? "Tous les campus"
     : (campuses.find((c) => c.id === selectedCampusId)?.name ??
@@ -90,7 +115,7 @@ export default async function RankingPage({
         ? (campusName ?? `Campus ${selectedCampusId}`)
         : `Campus ${selectedCampusId}`));
 
-  const dataKey = `${isGlobal ? "all" : selectedCampusId}-${selectedPoolYear}-${selectedPage}`;
+  const dataKey = `${isGlobal ? "all" : selectedCampusId}-${selectedCursusId}-${selectedPoolYear}-${selectedPage}`;
 
   return (
     <main className="wide">
@@ -105,7 +130,8 @@ export default async function RankingPage({
         <div>
           <h1>{isGlobal ? "Classement global" : "Classement"}</h1>
           <p className="sub">
-            {selectedCampusName} · Piscine {selectedPoolYear}
+            {selectedCursusName} · {selectedCampusName} · Piscine{" "}
+            {selectedPoolYear}
           </p>
         </div>
         <Suspense
@@ -119,22 +145,24 @@ export default async function RankingPage({
           <GlobalRank
             accessToken={accessToken!}
             userId={userId!}
-            cursusId={cursusId}
-            poolYear={poolYear!}
+            cursusId={selectedCursusId}
+            poolYear={selectedPoolYear}
           />
         </Suspense>
       </header>
 
       <Filters
         campuses={campuses}
+        cursuses={cursuses}
         poolYears={poolYears}
         currentCampus={isGlobal ? "all" : String(selectedCampusId)}
+        currentCursus={String(selectedCursusId)}
         currentPoolYear={selectedPoolYear}
         myCampusId={campusId}
       />
 
       <Suspense
-        key={`promo-${isGlobal ? "all" : selectedCampusId}-${selectedPoolYear}`}
+        key={`promo-${isGlobal ? "all" : selectedCampusId}-${selectedCursusId}-${selectedPoolYear}`}
         fallback={null}
       >
         <PromoStats
@@ -142,7 +170,7 @@ export default async function RankingPage({
           login={login!}
           campusId={selectedCampusId}
           poolYear={selectedPoolYear}
-          cursusId={cursusId}
+          cursusId={selectedCursusId}
         />
       </Suspense>
 
@@ -152,7 +180,7 @@ export default async function RankingPage({
           login={login!}
           campusId={selectedCampusId}
           poolYear={selectedPoolYear}
-          cursusId={cursusId}
+          cursusId={selectedCursusId}
           page={selectedPage}
         />
       </Suspense>

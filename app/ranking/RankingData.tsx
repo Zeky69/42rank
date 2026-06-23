@@ -213,6 +213,7 @@ export default async function RankingData({
   const buildPageHref = (p: number) => {
     const params = new URLSearchParams();
     params.set("campus", campusParam);
+    params.set("cursus", String(cursusId));
     params.set("pool", poolYear);
     if (p > 1) params.set("page", String(p));
     return `/ranking?${params.toString()}`;
@@ -221,6 +222,7 @@ export default async function RankingData({
   const buildCompareHref = (otherLogin: string) => {
     const params = new URLSearchParams();
     params.set("campus", campusParam);
+    params.set("cursus", String(cursusId));
     params.set("pool", poolYear);
     if (currentPage > 1) params.set("page", String(currentPage));
     return `/compare/${encodeURIComponent(otherLogin)}?${params.toString()}`;
