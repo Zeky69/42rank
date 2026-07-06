@@ -132,6 +132,11 @@ function PodiumSpot({
         </span>
       )}
       {place === 1 && <Confetti />}
+      {place !== 1 && (
+        <span className="podium-tear" aria-hidden="true">
+          😭
+        </span>
+      )}
       <div className={`podium-medal ${tier}`}>{place}</div>
       <ClickableAvatar
         src={pickAvatar(cu)}
