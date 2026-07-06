@@ -1,4 +1,4 @@
-import { ftFetch, TTL } from "@/lib/ft-api";
+import { ftFetch, Priority, TTL } from "@/lib/ft-api";
 
 const PAGE_SIZE = 100;
 const MAX_PAGES = 25; // garde-fou : 2500 étudiants max scannés pour les stats
@@ -33,7 +33,11 @@ async function fetchPromo(
       `&range[begin_at]=${from},${to}` +
       `&sort=-level` +
       `&page[size]=${PAGE_SIZE}&page[number]=${page}`;
-    const batch = await ftFetch<Row[]>(path, token, { ttl: TTL.ranking });
+    // Priorité basse : widget secondaire, ne doit pas retarder le classement principal.
+    const batch = await ftFetch<Row[]>(path, token, {
+      ttl: TTL.ranking,
+      priority: Priority.low,
+    });
     for (const r of batch) {
       if (r.user.pool_year === poolYear) {
         out.push({ login: r.user.login, level: r.level });

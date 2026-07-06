@@ -1,4 +1,4 @@
-import { ftFetch, TTL } from "@/lib/ft-api";
+import { ftFetch, Priority, TTL } from "@/lib/ft-api";
 
 type Row = {
   level: number;
@@ -40,7 +40,11 @@ export default async function GlobalRank({
         `&range[begin_at]=${from},${to}` +
         `&sort=-level` +
         `&page[size]=${PAGE_SIZE}&page[number]=${page}`;
-      const batch = await ftFetch<Row[]>(path, accessToken, { ttl: TTL.ranking });
+      // Priorité basse : widget secondaire, ne doit pas retarder le classement principal.
+      const batch = await ftFetch<Row[]>(path, accessToken, {
+        ttl: TTL.ranking,
+        priority: Priority.low,
+      });
 
       for (const cu of batch) {
         if (cu.user.pool_year !== poolYear) continue;

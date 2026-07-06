@@ -9,30 +9,53 @@ type CacheEntry = { data: unknown; expires: number };
 
 const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<unknown>>();
-// Per-token queue ensuring max ~1.8 req/s, safely under the 42 API 2 req/s spam limit
-const tokenQueues = new Map<string, Promise<void>>();
 const RATE_LIMIT_MS = 550;
+
+// Per-token priority queue ensuring max ~1.8 req/s, safely under the 42 API
+// 2 req/s spam limit. Higher priority slots jump ahead of queued (but not yet
+// dispatched) lower-priority ones, so a page's main content isn't stuck behind
+// a secondary widget's 20-page scan competing for the same rate limit.
+export const Priority = { high: 1, low: 0 } as const;
+
+type QueueEntry = { priority: number; resolve: () => void };
+type TokenState = { queue: QueueEntry[]; busy: boolean };
+const tokenState = new Map<string, TokenState>();
+
+function processQueue(token: string): void {
+  const state = tokenState.get(token);
+  if (!state || state.busy || state.queue.length === 0) return;
+  state.busy = true;
+  // Stable-ish: highest priority first; ties keep insertion order.
+  state.queue.sort((a, b) => b.priority - a.priority);
+  const next = state.queue.shift()!;
+  next.resolve();
+  setTimeout(() => {
+    state.busy = false;
+    processQueue(token);
+  }, RATE_LIMIT_MS);
+}
+
+function acquireSlot(token: string, priority: number = Priority.high): Promise<void> {
+  return new Promise((resolve) => {
+    let state = tokenState.get(token);
+    if (!state) {
+      state = { queue: [], busy: false };
+      tokenState.set(token, state);
+    }
+    state.queue.push({ priority, resolve });
+    processQueue(token);
+  });
+}
 
 const DEFAULT_TTL = 5 * 60 * 1000;
 export const TTL = {
   short: 30 * 1000,
-  ranking: 5 * 60 * 1000,
+  ranking: 10 * 60 * 1000,
   projects: 30 * 60 * 1000,
   longLived: 60 * 60 * 1000,
 };
 
-export type FetchOptions = { ttl?: number; force?: boolean };
-
-// Returns a promise that resolves when this slot's turn arrives.
-// Each call chains a RATE_LIMIT_MS delay for the next caller.
-function acquireSlot(token: string): Promise<void> {
-  const prev = tokenQueues.get(token) ?? Promise.resolve();
-  tokenQueues.set(
-    token,
-    prev.then(() => new Promise<void>((r) => setTimeout(r, RATE_LIMIT_MS))),
-  );
-  return prev;
-}
+export type FetchOptions = { ttl?: number; force?: boolean; priority?: number };
 
 export async function ftFetch<T = unknown>(
   path: string,
@@ -52,7 +75,7 @@ export async function ftFetch<T = unknown>(
   if (flying) return flying as Promise<T>;
 
   const promise = (async () => {
-    await acquireSlot(accessToken);
+    await acquireSlot(accessToken, options.priority ?? Priority.high);
     try {
       const res = await fetch(`https://api.intra.42.fr${path}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
