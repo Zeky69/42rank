@@ -320,6 +320,45 @@ h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; }
   box-shadow: 0 0 0 3px #00babc, 0 0 28px rgba(0, 186, 188, 0.45);
 }
 
+.podium-crown {
+  position: absolute;
+  top: -38px;
+  font-size: 30px;
+  line-height: 1;
+  z-index: 5;
+  filter: drop-shadow(0 2px 6px rgba(250, 204, 21, 0.6));
+  animation: crown-bounce 2.4s ease-in-out infinite;
+}
+@keyframes crown-bounce {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-4px) rotate(4deg); }
+}
+
+.confetti-wrap {
+  position: absolute;
+  inset: -40px 0 auto 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 4;
+}
+.confetti-piece {
+  position: absolute;
+  top: 0;
+  width: 7px;
+  height: 12px;
+  border-radius: 2px;
+  opacity: 0;
+  animation-name: confetti-fall;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}
+@keyframes confetti-fall {
+  0% { opacity: 0; transform: translate(0, -10px) rotate(0deg); }
+  10% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--drift), 160px) rotate(360deg); }
+}
+
 /* ============ GRID & CARDS ============ */
 .grid {
   display: grid;

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ftFetch, TTL, TokenExpiredError } from "@/lib/ft-api";
 import ClickableAvatar from "./ClickableAvatar";
+import Confetti from "./Confetti";
 import ProfileLink from "../ProfileLink";
 
 const PAGE_SIZE = 100;
@@ -125,6 +126,12 @@ function PodiumSpot({
   const lvlPct = Math.round((cu.level - lvlInt) * 100);
   return (
     <div className={`podium-spot place-${place} ${isMe ? "me" : ""}`}>
+      {place === 1 && (
+        <span className="podium-crown" aria-hidden="true">
+          👑
+        </span>
+      )}
+      {place === 1 && <Confetti />}
       <div className={`podium-medal ${tier}`}>{place}</div>
       <ClickableAvatar
         src={pickAvatar(cu)}
