@@ -6,7 +6,7 @@ const BUCKET = 2; // largeur d'un barreau d'histogramme, en niveaux
 
 type Row = {
   level: number;
-  user: { login: string; pool_year?: string | null };
+  user: { login: string; pool_year?: string | null; pool_month?: string | null };
 };
 
 function poolYearDateRange(poolYear: string): { from: string; to: string } {
@@ -20,6 +20,7 @@ function poolYearDateRange(poolYear: string): { from: string; to: string } {
 async function fetchPromo(
   campusId: number | null,
   poolYear: string,
+  poolMonth: string,
   cursusId: number,
   token: string,
 ): Promise<{ login: string; level: number }[]> {
@@ -39,7 +40,10 @@ async function fetchPromo(
       priority: Priority.low,
     });
     for (const r of batch) {
-      if (r.user.pool_year === poolYear) {
+      if (
+        r.user.pool_year === poolYear &&
+        (poolMonth === "all" || r.user.pool_month === poolMonth)
+      ) {
         out.push({ login: r.user.login, level: r.level });
       }
     }
@@ -61,6 +65,7 @@ type Props = {
   login: string;
   campusId: number | null;
   poolYear: string;
+  poolMonth: string;
   cursusId: number;
 };
 
@@ -69,11 +74,12 @@ export default async function PromoStats({
   login,
   campusId,
   poolYear,
+  poolMonth,
   cursusId,
 }: Props) {
   let promo: { login: string; level: number }[];
   try {
-    promo = await fetchPromo(campusId, poolYear, cursusId, accessToken);
+    promo = await fetchPromo(campusId, poolYear, poolMonth, cursusId, accessToken);
   } catch {
     return null; // non bloquant : si l'API échoue, on n'affiche rien
   }

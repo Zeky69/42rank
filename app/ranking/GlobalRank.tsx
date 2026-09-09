@@ -1,8 +1,9 @@
 import { ftFetch, Priority, TTL } from "@/lib/ft-api";
+import { poolMonthLabel } from "@/lib/pool-months";
 
 type Row = {
   level: number;
-  user: { id: number; pool_year?: string | null };
+  user: { id: number; pool_year?: string | null; pool_month?: string | null };
 };
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
   userId: number;
   cursusId: number;
   poolYear: string;
+  poolMonth: string;
 };
 
 function poolYearDateRange(poolYear: string): { from: string; to: string } {
@@ -43,6 +45,7 @@ export default async function GlobalRank({
   userId,
   cursusId,
   poolYear,
+  poolMonth,
 }: Props) {
   try {
     const { from, to } = poolYearDateRange(poolYear);
@@ -73,6 +76,7 @@ export default async function GlobalRank({
       for (const batch of batches) {
         for (const cu of batch) {
           if (cu.user.pool_year !== poolYear) continue;
+          if (poolMonth !== "all" && cu.user.pool_month !== poolMonth) continue;
           if (cu.user.id === userId) {
             rank = before + 1;
             break;
@@ -93,7 +97,10 @@ export default async function GlobalRank({
         <span className="global-rank-num">
           {rank !== null ? `#${rank.toLocaleString("fr-FR")}` : `#${(MAX_PAGES * PAGE_SIZE).toLocaleString("fr-FR")}+`}
         </span>
-        <span className="global-rank-lbl">Rang mondial · Piscine {poolYear}</span>
+        <span className="global-rank-lbl">
+          Rang mondial · Piscine {poolYear}
+          {poolMonth !== "all" ? ` (${poolMonthLabel(poolMonth)})` : ""}
+        </span>
       </div>
     );
   } catch {

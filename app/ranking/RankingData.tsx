@@ -19,6 +19,7 @@ type CursusUserRow = {
     displayname: string;
     usual_full_name?: string;
     pool_year?: string | null;
+    pool_month?: string | null;
     image?: {
       link?: string;
       versions?: { large?: string; medium?: string; small?: string };
@@ -38,6 +39,7 @@ function poolYearDateRange(poolYear: string): { from: string; to: string } {
 async function fetchRankingPage(
   campusId: number | null,
   poolYear: string,
+  poolMonth: string,
   cursusId: number,
   pageNum: number,
   token: string,
@@ -54,10 +56,14 @@ async function fetchRankingPage(
     ttl: TTL.ranking,
   });
   // rawCount = taille brute de la page API ; sert à savoir s'il y a une page
-  // suivante. Le filtre pool_year ne doit pas influencer cette décision,
-  // sinon la pagination disparaît dès qu'une page contient d'autres promos.
+  // suivante. Les filtres pool_year/pool_month ne doivent pas influencer cette
+  // décision, sinon la pagination disparaît dès qu'une page contient d'autres promos.
   return {
-    rows: batch.filter((cu) => cu.user.pool_year === poolYear),
+    rows: batch.filter(
+      (cu) =>
+        cu.user.pool_year === poolYear &&
+        (poolMonth === "all" || cu.user.pool_month === poolMonth),
+    ),
     rawCount: batch.length,
   };
 }
@@ -69,13 +75,21 @@ async function fetchRankingPage(
 async function countBefore(
   campusId: number | null,
   poolYear: string,
+  poolMonth: string,
   cursusId: number,
   page: number,
   token: string,
 ): Promise<number> {
   let total = 0;
   for (let p = 1; p < page; p++) {
-    const { rows } = await fetchRankingPage(campusId, poolYear, cursusId, p, token);
+    const { rows } = await fetchRankingPage(
+      campusId,
+      poolYear,
+      poolMonth,
+      cursusId,
+      p,
+      token,
+    );
     total += rows.length;
   }
   return total;
@@ -171,6 +185,7 @@ type Props = {
   login: string;
   campusId: number | null;
   poolYear: string;
+  poolMonth: string;
   cursusId: number;
   page: number;
 };
@@ -180,6 +195,7 @@ export default async function RankingData({
   login,
   campusId,
   poolYear,
+  poolMonth,
   cursusId,
   page,
 }: Props) {
@@ -193,13 +209,21 @@ export default async function RankingData({
     const result = await fetchRankingPage(
       campusId,
       poolYear,
+      poolMonth,
       cursusId,
       currentPage,
       accessToken,
     );
     rows = result.rows;
     rawCount = result.rawCount;
-    offset = await countBefore(campusId, poolYear, cursusId, currentPage, accessToken);
+    offset = await countBefore(
+      campusId,
+      poolYear,
+      poolMonth,
+      cursusId,
+      currentPage,
+      accessToken,
+    );
   } catch (e) {
     if (e instanceof TokenExpiredError) tokenExpired = true;
     else error = e instanceof Error ? e.message : String(e);
@@ -227,6 +251,7 @@ export default async function RankingData({
     params.set("campus", campusParam);
     params.set("cursus", String(cursusId));
     params.set("pool", poolYear);
+    if (poolMonth !== "all") params.set("month", poolMonth);
     if (p > 1) params.set("page", String(p));
     return `/ranking?${params.toString()}`;
   };
@@ -236,6 +261,7 @@ export default async function RankingData({
     params.set("campus", campusParam);
     params.set("cursus", String(cursusId));
     params.set("pool", poolYear);
+    if (poolMonth !== "all") params.set("month", poolMonth);
     if (currentPage > 1) params.set("page", String(currentPage));
     return `/compare/${encodeURIComponent(otherLogin)}?${params.toString()}`;
   };

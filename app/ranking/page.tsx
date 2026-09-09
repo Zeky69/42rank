@@ -6,8 +6,10 @@ import { recordActivity } from "@/lib/stats";
 import RankingData from "./RankingData";
 import RankingSkeleton from "./RankingSkeleton";
 import Filters from "./Filters";
+import FiltersAsync from "./FiltersAsync";
 import GlobalRank from "./GlobalRank";
 import PromoStats from "./PromoStats";
+import { isPiscineCursus, poolMonthLabel } from "@/lib/pool-months";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +56,13 @@ function buildPoolYears(): string[] {
 export default async function RankingPage({
   searchParams,
 }: {
-  searchParams: { campus?: string; pool?: string; cursus?: string; page?: string };
+  searchParams: {
+    campus?: string;
+    pool?: string;
+    month?: string;
+    cursus?: string;
+    page?: string;
+  };
 }) {
   const session = await getSession();
   if (!session.accessToken) redirect("/");
@@ -108,6 +116,11 @@ export default async function RankingPage({
   const selectedCursusName =
     cursuses.find((c) => c.id === selectedCursusId)?.name ??
     `Cursus ${selectedCursusId}`;
+  // La periode (mois de piscine) n'a de sens que pour un cursus de piscine ;
+  // on l'ignore silencieusement sinon pour eviter un filtre invisible.
+  const selectedPoolMonth = isPiscineCursus(selectedCursusName)
+    ? (searchParams.month ?? "all")
+    : "all";
   const selectedCampusName = isGlobal
     ? "Tous les campus"
     : (campuses.find((c) => c.id === selectedCampusId)?.name ??
@@ -115,7 +128,7 @@ export default async function RankingPage({
         ? (campusName ?? `Campus ${selectedCampusId}`)
         : `Campus ${selectedCampusId}`));
 
-  const dataKey = `${isGlobal ? "all" : selectedCampusId}-${selectedCursusId}-${selectedPoolYear}-${selectedPage}`;
+  const dataKey = `${isGlobal ? "all" : selectedCampusId}-${selectedCursusId}-${selectedPoolYear}-${selectedPoolMonth}-${selectedPage}`;
 
   return (
     <main className="wide">
@@ -132,6 +145,9 @@ export default async function RankingPage({
           <p className="sub">
             {selectedCursusName} · {selectedCampusName} · Piscine{" "}
             {selectedPoolYear}
+            {selectedPoolMonth !== "all"
+              ? ` · ${poolMonthLabel(selectedPoolMonth)}`
+              : ""}
           </p>
         </div>
         <Suspense
@@ -147,22 +163,42 @@ export default async function RankingPage({
             userId={userId!}
             cursusId={selectedCursusId}
             poolYear={selectedPoolYear}
+            poolMonth={selectedPoolMonth}
           />
         </Suspense>
       </header>
 
-      <Filters
-        campuses={campuses}
-        cursuses={cursuses}
-        poolYears={poolYears}
-        currentCampus={isGlobal ? "all" : String(selectedCampusId)}
-        currentCursus={String(selectedCursusId)}
-        currentPoolYear={selectedPoolYear}
-        myCampusId={campusId}
-      />
+      <Suspense
+        key={`filters-${isGlobal ? "all" : selectedCampusId}`}
+        fallback={
+          <Filters
+            campuses={campuses}
+            cursuses={cursuses}
+            poolYears={poolYears}
+            currentCampus={isGlobal ? "all" : String(selectedCampusId)}
+            currentCursus={String(selectedCursusId)}
+            currentPoolYear={selectedPoolYear}
+            currentPoolMonth={selectedPoolMonth}
+            myCampusId={campusId}
+          />
+        }
+      >
+        <FiltersAsync
+          accessToken={accessToken!}
+          campuses={campuses}
+          cursuses={cursuses}
+          poolYears={poolYears}
+          currentCampus={isGlobal ? "all" : String(selectedCampusId)}
+          currentCursus={String(selectedCursusId)}
+          currentPoolYear={selectedPoolYear}
+          currentPoolMonth={selectedPoolMonth}
+          myCampusId={campusId}
+          selectedCampusId={selectedCampusId}
+        />
+      </Suspense>
 
       <Suspense
-        key={`promo-${isGlobal ? "all" : selectedCampusId}-${selectedCursusId}-${selectedPoolYear}`}
+        key={`promo-${isGlobal ? "all" : selectedCampusId}-${selectedCursusId}-${selectedPoolYear}-${selectedPoolMonth}`}
         fallback={null}
       >
         <PromoStats
@@ -170,6 +206,7 @@ export default async function RankingPage({
           login={login!}
           campusId={selectedCampusId}
           poolYear={selectedPoolYear}
+          poolMonth={selectedPoolMonth}
           cursusId={selectedCursusId}
         />
       </Suspense>
@@ -180,6 +217,7 @@ export default async function RankingPage({
           login={login!}
           campusId={selectedCampusId}
           poolYear={selectedPoolYear}
+          poolMonth={selectedPoolMonth}
           cursusId={selectedCursusId}
           page={selectedPage}
         />
