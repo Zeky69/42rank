@@ -1,3 +1,5 @@
+import { loadDiskCache, saveDiskCache } from "@/lib/ft-disk-cache";
+
 export class TokenExpiredError extends Error {
   constructor() {
     super("Access token expired");
@@ -53,9 +55,18 @@ export const TTL = {
   ranking: 10 * 60 * 1000,
   projects: 30 * 60 * 1000,
   longLived: 60 * 60 * 1000,
+  monthly: 30 * 24 * 60 * 60 * 1000,
 };
 
-export type FetchOptions = { ttl?: number; force?: boolean; priority?: number };
+export type FetchOptions = {
+  ttl?: number;
+  force?: boolean;
+  priority?: number;
+  // Persiste aussi ce cache sur disque (data/ft-cache), pour survivre aux
+  // redemarrages du serveur. A reserver aux donnees a tres longue duree de
+  // vie (TTL.monthly) : campus, cursus, etc.
+  persist?: boolean;
+};
 
 export async function ftFetch<T = unknown>(
   path: string,
@@ -69,6 +80,13 @@ export async function ftFetch<T = unknown>(
   if (!options.force) {
     const hit = cache.get(key);
     if (hit && hit.expires > now) return hit.data as T;
+    if (options.persist) {
+      const disk = loadDiskCache<T>(key);
+      if (disk) {
+        cache.set(key, disk);
+        return disk.data;
+      }
+    }
   }
 
   const flying = inflight.get(key);
@@ -92,7 +110,9 @@ export async function ftFetch<T = unknown>(
         );
       }
       const data = (await res.json()) as T;
-      cache.set(key, { data, expires: Date.now() + ttl });
+      const expires = Date.now() + ttl;
+      cache.set(key, { data, expires });
+      if (options.persist) saveDiskCache(key, data, expires);
       return data;
     } finally {
       inflight.delete(key);

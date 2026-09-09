@@ -1,50 +1,16 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { ftFetch, TTL, TokenExpiredError } from "@/lib/ft-api";
 import { recordActivity } from "@/lib/stats";
 import RankingData from "./RankingData";
 import RankingSkeleton from "./RankingSkeleton";
-import Filters from "./Filters";
+import FiltersSkeleton from "./FiltersSkeleton";
 import FiltersAsync from "./FiltersAsync";
 import GlobalRank from "./GlobalRank";
 import PromoStats from "./PromoStats";
-import { isPiscineCursus, poolMonthLabel } from "@/lib/pool-months";
+import HeroSubtitle from "./HeroSubtitle";
 
 export const dynamic = "force-dynamic";
-
-type Campus = { id: number; name: string; country?: string };
-type Cursus = { id: number; name: string };
-
-async function fetchAllCampuses(token: string): Promise<Campus[]> {
-  const all: Campus[] = [];
-  for (let page = 1; page <= 10; page++) {
-    const batch = await ftFetch<Campus[]>(
-      `/v2/campus?page[size]=100&page[number]=${page}&sort=name`,
-      token,
-      { ttl: TTL.longLived },
-    );
-    all.push(
-      ...batch.map((c) => ({ id: c.id, name: c.name, country: c.country })),
-    );
-    if (batch.length < 100) break;
-  }
-  return all;
-}
-
-async function fetchAllCursus(token: string): Promise<Cursus[]> {
-  const all: Cursus[] = [];
-  for (let page = 1; page <= 3; page++) {
-    const batch = await ftFetch<Cursus[]>(
-      `/v2/cursus?page[size]=100&page[number]=${page}&sort=name`,
-      token,
-      { ttl: TTL.longLived },
-    );
-    all.push(...batch.map((c) => ({ id: c.id, name: c.name })));
-    if (batch.length < 100) break;
-  }
-  return all;
-}
 
 function buildPoolYears(): string[] {
   const current = new Date().getFullYear();
@@ -101,32 +67,11 @@ export default async function RankingPage({
     searchParams.page ? parseInt(searchParams.page, 10) || 1 : 1,
   );
 
-  let campuses: Campus[] = [];
-  let cursuses: Cursus[] = [];
-  try {
-    [campuses, cursuses] = await Promise.all([
-      fetchAllCampuses(accessToken!),
-      fetchAllCursus(accessToken!),
-    ]);
-  } catch (e) {
-    if (e instanceof TokenExpiredError) redirect("/api/auth/logout");
-    throw e;
-  }
   const poolYears = buildPoolYears();
-  const selectedCursusName =
-    cursuses.find((c) => c.id === selectedCursusId)?.name ??
-    `Cursus ${selectedCursusId}`;
-  // La periode (mois de piscine) n'a de sens que pour un cursus de piscine ;
-  // on l'ignore silencieusement sinon pour eviter un filtre invisible.
-  const selectedPoolMonth = isPiscineCursus(selectedCursusName)
-    ? (searchParams.month ?? "all")
-    : "all";
-  const selectedCampusName = isGlobal
-    ? "Tous les campus"
-    : (campuses.find((c) => c.id === selectedCampusId)?.name ??
-      (selectedCampusId === campusId
-        ? (campusName ?? `Campus ${selectedCampusId}`)
-        : `Campus ${selectedCampusId}`));
+  // Le menu "periode de piscine" n'est propose par Filters que pour un cursus
+  // de piscine ; inutile de connaitre le nom du cursus ici pour ca, ce qui
+  // evite de bloquer tout le rendu sur la liste complete des cursus.
+  const selectedPoolMonth = searchParams.month ?? "all";
 
   const dataKey = `${isGlobal ? "all" : selectedCampusId}-${selectedCursusId}-${selectedPoolYear}-${selectedPoolMonth}-${selectedPage}`;
 
@@ -142,13 +87,26 @@ export default async function RankingPage({
       <header className="hero">
         <div>
           <h1>{isGlobal ? "Classement global" : "Classement"}</h1>
-          <p className="sub">
-            {selectedCursusName} · {selectedCampusName} · Piscine{" "}
-            {selectedPoolYear}
-            {selectedPoolMonth !== "all"
-              ? ` · ${poolMonthLabel(selectedPoolMonth)}`
-              : ""}
-          </p>
+          <Suspense
+            fallback={
+              <p className="sub">
+                Cursus {selectedCursusId} ·{" "}
+                {isGlobal ? "Tous les campus" : `Campus ${selectedCampusId}`} · Piscine{" "}
+                {selectedPoolYear}
+              </p>
+            }
+          >
+            <HeroSubtitle
+              accessToken={accessToken!}
+              isGlobal={isGlobal}
+              selectedCampusId={selectedCampusId}
+              selectedCursusId={selectedCursusId}
+              selectedPoolYear={selectedPoolYear}
+              selectedPoolMonth={selectedPoolMonth}
+              myCampusId={campusId}
+              myCampusName={campusName}
+            />
+          </Suspense>
         </div>
         <Suspense
           fallback={
@@ -170,23 +128,10 @@ export default async function RankingPage({
 
       <Suspense
         key={`filters-${isGlobal ? "all" : selectedCampusId}`}
-        fallback={
-          <Filters
-            campuses={campuses}
-            cursuses={cursuses}
-            poolYears={poolYears}
-            currentCampus={isGlobal ? "all" : String(selectedCampusId)}
-            currentCursus={String(selectedCursusId)}
-            currentPoolYear={selectedPoolYear}
-            currentPoolMonth={selectedPoolMonth}
-            myCampusId={campusId}
-          />
-        }
+        fallback={<FiltersSkeleton showPoolMonth={selectedPoolMonth !== "all"} />}
       >
         <FiltersAsync
           accessToken={accessToken!}
-          campuses={campuses}
-          cursuses={cursuses}
           poolYears={poolYears}
           currentCampus={isGlobal ? "all" : String(selectedCampusId)}
           currentCursus={String(selectedCursusId)}

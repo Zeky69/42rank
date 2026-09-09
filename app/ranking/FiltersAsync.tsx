@@ -1,13 +1,17 @@
-import { ftFetch, Priority } from "@/lib/ft-api";
+import { redirect } from "next/navigation";
+import { ftFetch, Priority, TTL, TokenExpiredError } from "@/lib/ft-api";
+import {
+  fetchAllCampuses,
+  fetchAllCursus,
+  type Campus,
+  type Cursus,
+} from "@/lib/campus-cursus";
 import Filters from "./Filters";
 
-type Campus = { id: number; name: string; country?: string };
-type Cursus = { id: number; name: string };
-
 // La liste des cursus ouverts sur un campus change rarement : on garde le
-// resultat en cache longtemps pour eviter de refaire la decouverte a chaque
-// visite (partage entre tous les utilisateurs via le cache serveur de ftFetch).
-const CAMPUS_CURSUS_TTL = 24 * 60 * 60 * 1000;
+// resultat en cache un mois, comme le reste des donnees de la barre de
+// recherche (partage entre tous les utilisateurs via le cache serveur de ftFetch).
+const CAMPUS_CURSUS_TTL = TTL.monthly;
 
 async function fetchCampusCursusIds(
   campusId: number,
@@ -21,7 +25,7 @@ async function fetchCampusCursusIds(
         const rows = await ftFetch<{ id: number }[]>(
           `/v2/cursus_users?filter[cursus_id]=${c.id}&filter[campus_id]=${campusId}&page[size]=1`,
           token,
-          { ttl: CAMPUS_CURSUS_TTL, priority: Priority.low },
+          { ttl: CAMPUS_CURSUS_TTL, priority: Priority.low, persist: true },
         );
         if (rows.length > 0) present.add(c.id);
       } catch {
@@ -36,8 +40,6 @@ async function fetchCampusCursusIds(
 
 type Props = {
   accessToken: string;
-  campuses: Campus[];
-  cursuses: Cursus[];
   poolYears: string[];
   currentCampus: string;
   currentCursus: string;
@@ -49,8 +51,6 @@ type Props = {
 
 export default async function FiltersAsync({
   accessToken,
-  campuses,
-  cursuses,
   poolYears,
   currentCampus,
   currentCursus,
@@ -59,6 +59,22 @@ export default async function FiltersAsync({
   myCampusId,
   selectedCampusId,
 }: Props) {
+  let campuses: Campus[];
+  let cursuses: Cursus[];
+  try {
+    // Partage le cache/inflight de HeroSubtitle : meme cle de requete, donc pas
+    // de double appel reseau meme si les deux composants s'executent en parallele.
+    [campuses, cursuses] = await Promise.all([
+      fetchAllCampuses(accessToken),
+      fetchAllCursus(accessToken),
+    ]);
+  } catch (e) {
+    if (e instanceof TokenExpiredError) redirect("/api/auth/logout");
+    // Widget secondaire : mieux vaut un select vide qu'une page cassee.
+    campuses = [];
+    cursuses = [];
+  }
+
   let availableCursuses = cursuses;
 
   if (selectedCampusId !== null) {
