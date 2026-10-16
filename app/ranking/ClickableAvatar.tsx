@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { funnyAvatar } from "@/lib/funny-avatar";
+import { avatarUrl } from "@/lib/avatar-url";
 
 type Props = {
   src: string | null;
@@ -50,8 +51,8 @@ export default function ClickableAvatar({
   }, [src]);
 
   const fallback = !src || failed ? funnyAvatar(login) : null;
-  const shown = fallback?.src ?? src!;
-  const shownLarge = fallback?.src ?? large ?? src!;
+  const shown = fallback?.src ?? avatarUrl(src)!;
+  const shownLarge = fallback?.src ?? avatarUrl(large ?? src)!;
 
   return (
     <>
