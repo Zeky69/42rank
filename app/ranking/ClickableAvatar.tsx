@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-
-const DEFAULT_AVATAR = "/default-avatar.svg";
+import { funnyAvatar } from "@/lib/funny-avatar";
 
 type Props = {
   src: string | null;
@@ -50,9 +49,9 @@ export default function ClickableAvatar({
     setFailed(!!img && img.complete && img.naturalWidth === 0);
   }, [src]);
 
-  if (!src || failed) {
-    return <img className={className} src={DEFAULT_AVATAR} alt={alt} />;
-  }
+  const fallback = !src || failed ? funnyAvatar(login) : null;
+  const shown = fallback?.src ?? src!;
+  const shownLarge = fallback?.src ?? large ?? src!;
 
   return (
     <>
@@ -65,8 +64,9 @@ export default function ClickableAvatar({
         <img
           ref={imgRef}
           className={className}
-          src={src}
+          src={shown}
           alt={alt}
+          title={fallback?.title}
           loading="lazy"
           onError={() => setFailed(true)}
         />
@@ -90,10 +90,13 @@ export default function ClickableAvatar({
               >
                 ×
               </button>
-              <img src={large ?? src} alt={alt} className="modal-img" />
+              <img src={shownLarge} alt={alt} className="modal-img" />
               <div className="modal-caption">
                 <div className="modal-login">{login}</div>
                 {fullName && <div className="modal-fullname">{fullName}</div>}
+                {fallback && (
+                  <div className="modal-fullname">« {fallback.title} »</div>
+                )}
               </div>
             </div>
           </div>,
