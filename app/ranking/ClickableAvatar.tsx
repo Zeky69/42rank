@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+const DEFAULT_AVATAR = "/default-avatar.svg";
 
 type Props = {
   src: string | null;
@@ -22,6 +24,8 @@ export default function ClickableAvatar({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -40,12 +44,14 @@ export default function ClickableAvatar({
     };
   }, [open]);
 
-  if (!src) {
-    return (
-      <div className={`${className} avatar-fallback`}>
-        {alt.slice(0, 2).toUpperCase()}
-      </div>
-    );
+  useEffect(() => {
+    // l'erreur a pu arriver avant l'hydratation, onError ne se déclenchera pas
+    const img = imgRef.current;
+    setFailed(!!img && img.complete && img.naturalWidth === 0);
+  }, [src]);
+
+  if (!src || failed) {
+    return <img className={className} src={DEFAULT_AVATAR} alt={alt} />;
   }
 
   return (
@@ -56,7 +62,14 @@ export default function ClickableAvatar({
         onClick={() => setOpen(true)}
         aria-label={`Voir la photo de ${login}`}
       >
-        <img className={className} src={src} alt={alt} loading="lazy" />
+        <img
+          ref={imgRef}
+          className={className}
+          src={src}
+          alt={alt}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
       </button>
 
       {open &&
